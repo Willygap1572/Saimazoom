@@ -1,36 +1,28 @@
-#!/usr/bin/env python
-import pika
-import json
-import uuid
+import src.client as c
+import sys
+import os  
 
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host='localhost'))
-channel = connection.channel()
-
-client_id = uuid.uuid4()
-channel.queue_declare(queue='client_' + str(client_id) + '_queue', durable=True)
-
-#message = ' '.join(sys.argv[1:]) or "Hello World!"
-order_id = uuid.uuid4()
-message = json.dumps({'order_id': str(order_id), 'products':['Raton', 'Teclado', 'Pantalla'], 'client_id': str(client_id)})
-channel.basic_publish(
-    exchange='',
-    routing_key='task_queue',
-    body=message,
-    properties=pika.BasicProperties(
-        delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE
-    ))
-print(" [x] Sent %r" % message)
-
-
-def callback(ch, method, properties, body):
-    print(" [x] Received %r" % body)
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-    channel.stop_consuming()
-
-channel.basic_qos(prefetch_count=1)
-channel.basic_consume(queue='client_' + str(client_id) + '_queue', on_message_callback=callback)
-
-channel.start_consuming()
+def main():
+    print('Este programa simula a un cliente registrandose, haciendo pedidos y viendo sus pedidos')
+    client = c.Client()
+    client.client_register()
+    client.order_products(['productX', 'productX'])
+    client.order_products(['productY', 'productY'])
+    client.see_orders()
+    try:
+        client.channel.start_consuming()
+    except Exception as e:
+        print(e)
+        client.channel.stop_consuming()
+    
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        print('Interrupted')
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
 
 

@@ -1,30 +1,31 @@
-#!/usr/bin/env python
-import pika
-import time
+import src.controler as c
+import sys
+import os
+import json
+import argparse
 
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host='localhost'))
-channel = connection.channel()
+#saves a state of the controler in a file
+def save_state(controler):
+    with open('state.json', 'w') as f:
+        json.dump(controler.content_dict(), f)
+    
 
-channel.queue_declare(queue='task_queue', durable=True)
-print(' [*] Waiting for messages. To exit press CTRL+C')
-#channel.queue_declare(queue='robot_task_queue', durable=True)
+if __name__ == '__main__':
 
-def send_to_robot(body):
-    channel.basic_publish(exchange='', routing_key='robot_task_queue', body=body,
-                          properties=pika.BasicProperties(
-                              delivery_mode=2,  # make message persistent
-                          ))
+    parser = argparse.ArgumentParser(description='Controlador de Saimazoom, el mejor servicio de compras online')
+    parser.add_argument('-l','--load', type=str, help='Usage:\n\t -l true si se quiere cargar el archivo state.json\n\t -l false si quieres que empiece de 0.', required=True)
+    args = parser.parse_args()
+    controler = c.Controler()
+    if args.load == 'true':
+        with open('state.json', 'r') as f:
+            controler.content_load(json.load(f))
+    try:
+        controler.channel.start_consuming()
+    except KeyboardInterrupt:
+        save_state(controler)
+        print('Interrupted')
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
 
-def callback(ch, method, properties, body):
-    print(" [x] Received %r" % body.decode())
-    send_to_robot(body)
-    time.sleep(body.count(b'.'))
-    print(" [x] Done")
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-
-channel.basic_qos(prefetch_count=1)
-channel.basic_consume(queue='task_queue', on_message_callback=callback)
-
-channel.start_consuming()
